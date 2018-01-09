@@ -15,44 +15,129 @@ limitations under the License.
 -->
 
 
-<link rel="import" href="../iron-flex-layout/iron-flex-layout-classes.html">
 <link rel="import" href="../polymer/polymer.html">
 
-<!--
-`<ft-global-variable>`
 
-A non-display element that provides global variables within a project, working across all elements regardless of where they are in the DOM.
-
-@demo
--->
 <dom-module id="ft-global-variable">
 
+    <!-- This is not a visual element -->
     <template>
-
-        <style include="iron-flex iron-flex-alignment iron-positioning"></style>
-
         <style>
             :host {
-                display:block;
-                overflow:hidden;
-                @apply --ft-global-variable;
+                display: none;
             }
         </style>
-
-        <div>
-            ft-global-variable
-        </div>
-
     </template>
 
     <script>
+
+        // Make sure our global data singleton exists
+        window.FileThisGlobalVariables = window.FileThisGlobalVariables || {};
+
         Polymer({
 
             is: 'ft-global-variable',
 
-            properties: {
-            }
+            properties:
+            {
+                name: {
+                    type: String,
+                },
 
-        });
+                value: {
+                    notify: true,
+                    observer: "_onValueChanged",
+                },
+            },
+
+            ready: function()
+            {
+                this._register();
+            },
+
+            detached: function()
+            {
+                this._unregister();
+            },
+
+            _register: function()
+            {
+                var name = this.name;
+
+                // If there is no reference to our name, yet
+                var references = window.FileThisGlobalVariables[name];
+                if (references === undefined)
+                {
+                    // Add our reference, and we're done
+                    window.FileThisGlobalVariables[name] = [this];
+                    return;
+                }
+
+                // If our reference is already in the list, do nothing
+                var index = references.indexOf(this);
+                var isReferenced = (index > 0);
+                if (isReferenced)
+                    return;
+
+                // Get another reference, if there is one
+                var otherReference = null;
+                if (references.length > 0)
+                    otherReference = references[0];
+
+                // Add our reference to the list
+                references.push(this);
+
+                // Get our value from another reference
+                if (otherReference !== null)
+                    this.value = otherReference.get("value");
+            },
+
+            _onValueChanged: function(to, from)
+            {
+                var name = this.name;
+                var value = this.value;
+
+                // If there is no value yet, do nothing
+                // TODO: Can this ever happen? If not, remove.
+                if (value === undefined)
+                    return;
+
+                // If there is no reference to our name, yet
+                var references = window.FileThisGlobalVariables[name];
+                if (references === undefined)
+                {
+                    // Add our reference, and we're done
+                    window.FileThisGlobalVariables[name] = [this];
+                    return;
+                }
+
+                // Propagate our value to all other references
+                references.forEach(function(reference) {
+                    if (reference !== this)
+                        reference.set("value", value);
+                });
+            },
+
+            _unregister: function()
+            {
+                var name = this.name;
+
+                // If there are no references to our name, do nothing
+                var references = window.FileThisGlobalVariables[name];
+                if (references === undefined)
+                    return;
+
+                // If our reference is not in the list, do nothing
+                var index = references.indexOf(this);
+                var isReferenced = (index > 0);
+                if (!isReferenced)
+                    return;
+
+                // Remove our reference from the list
+                references.splice(index, 1);
+            },
+
+        })
+
     </script>
 </dom-module>
