@@ -48,15 +48,89 @@ limitations under the License.
                     notify: true,
                     observer: "_onValueChanged",
                 },
+
+                _isReady: {
+                    value: false,
+                },
+
+                _havePendingValue: {
+                    value: false,
+                },
+
+                _pendingValue: {
+                },
             },
 
             ready: function()
             {
                 this._register();
+                this._commitValue();
+                this._isReady = true;
+            },
+
+            _onValueChanged: function(to, from)
+            {
+                this._register();
+                this._propagateValue();
+            },
+
+            _getValue: function()
+            {
+                if (this._isReady)
+                {
+                    return this.value;
+                }
+                else // not ready yet
+                {
+                    if (this._havePendingValue)
+                        return this._pendingValue;
+                    else
+                        return undefined;
+                }
+            },
+
+            _setValue: function(value)
+            {
+                if (this._isReady)
+                {
+                    this.set("value", value);
+                }
+                else
+                {
+                    this._havePendingValue = true;
+                    this._pendingValue = value;
+                }
+            },
+            
+            _commitValue: function()
+            {
+                if (this._havePendingValue)
+                {
+                    var value = this._pendingValue;
+                    this.set("value", value);
+
+                    this._havePendingValue = false;
+                    this._pendingValue = undefined;
+                }
+            },
+
+            _propagateValue: function()
+            {
+                var name = this.name;
+                var value = this._getValue();
+
+                // Set the values of all other references to our value
+                var references = window.FileThisGlobalVariables[name];
+                references.forEach(function(reference) {
+                    if (reference !== this)
+                        reference._setValue(value);
+                });
             },
 
             detached: function()
             {
+                // TODO: Need to reset things, but which? Will we get ready() call again when re-attached?
+
                 this._unregister();
             },
 
@@ -79,43 +153,8 @@ limitations under the License.
                 if (isReferenced)
                     return;
 
-                // Get another reference, if there is one
-                var otherReference = null;
-                if (references.length > 0)
-                    otherReference = references[0];
-
                 // Add our reference to the list
                 references.push(this);
-
-                // Get our value from another reference
-                if (otherReference !== null)
-                    this.value = otherReference.get("value");
-            },
-
-            _onValueChanged: function(to, from)
-            {
-                var name = this.name;
-                var value = this.value;
-
-                // If there is no value yet, do nothing
-                // TODO: Can this ever happen? If not, remove.
-                if (value === undefined)
-                    return;
-
-                // If there is no reference to our name, yet
-                var references = window.FileThisGlobalVariables[name];
-                if (references === undefined)
-                {
-                    // Add our reference, and we're done
-                    window.FileThisGlobalVariables[name] = [this];
-                    return;
-                }
-
-                // Propagate our value to all other references
-                references.forEach(function(reference) {
-                    if (reference !== this)
-                        reference.set("value", value);
-                });
             },
 
             _unregister: function()
