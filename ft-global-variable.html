@@ -31,25 +31,36 @@ limitations under the License.
 
     <script>
 
-        // Make sure our global data singleton exists
-        window.FileThisGlobalVariables = window.FileThisGlobalVariables || {};
+        // Make sure our global singletons exist
+        window.FileThisGlobalVariableNameToReferencesMap = window.FileThisGlobalVariableNameToReferencesMap || {};
+        window.FileThisGlobalVariablesArePending = window.FileThisGlobalVariablesArePending || true;
+        window.FileThisGlobalVariablesCommitting = window.FileThisGlobalVariablesCommitting || false;
+        window.FileThisGlobalVariablesCommitScheduled = window.FileThisGlobalVariablesCommitScheduled || false;
 
         Polymer({
 
             is: 'ft-global-variable',
 
+            observers:
+            [
+                "_onNameOrValueChanged(name, value)",
+            ],
+
             properties:
             {
+                context: {
+                    type: String,
+                },
+
                 name: {
                     type: String,
                 },
 
                 value: {
                     notify: true,
-                    observer: "_onValueChanged",
                 },
 
-                _isReady: {
+                _registered: {
                     value: false,
                 },
 
@@ -60,90 +71,50 @@ limitations under the License.
                 _pendingValue: {
                 },
             },
-
-            ready: function()
-            {
-                this._register();
-                this._commitValue();
-                this._isReady = true;
-            },
-
-            _onValueChanged: function(to, from)
-            {
-                this._register();
-                this._propagateValue();
-            },
-
-            _getValue: function()
-            {
-                if (this._isReady)
-                {
-                    return this.value;
-                }
-                else // not ready yet
-                {
-                    if (this._havePendingValue)
-                        return this._pendingValue;
-                    else
-                        return undefined;
-                }
-            },
-
-            _setValue: function(value)
-            {
-                if (this._isReady)
-                {
-                    this.set("value", value);
-                }
-                else
-                {
-                    this._havePendingValue = true;
-                    this._pendingValue = value;
-                }
-            },
             
-            _commitValue: function()
+            
+            // Lifecycle: After "created", and after both our "name" and "value" properties have been defined.
+            
+            _onNameOrValueChanged: function(name, value)
             {
-                if (this._havePendingValue)
+                // If "name" is not defined yet, wait until it is
+                if (name === undefined)
+                    return;
+
+                // If we are in the middle of committing all pending values, do nothing
+                if (window.FileThisGlobalVariablesCommitting)
+                    return;
+
+                if (this._registered)
                 {
-                    var value = this._pendingValue;
-                    this.set("value", value);
-
-                    this._havePendingValue = false;
-                    this._pendingValue = undefined;
+                    this._propagateValue();
                 }
-            },
+                else // not yet registered
+                {
+                    // If "value" is not defined yet, wait until it is
+                    if (value === undefined)
+                        return;
 
-            _propagateValue: function()
-            {
-                var name = this.name;
-                var value = this._getValue();
-
-                // Set the values of all other references to our value
-                var references = window.FileThisGlobalVariables[name];
-                references.forEach(function(reference) {
-                    if (reference !== this)
-                        reference._setValue(value);
-                });
-            },
-
-            detached: function()
-            {
-                // TODO: Need to reset things, but which? Will we get ready() call again when re-attached?
-
-                this._unregister();
+                    this._register();
+                    this._propagateValue();
+                }
             },
 
             _register: function()
             {
+                this._registered = true;
+
+                // TODO: Consider optimizing to short-circuit after registration has been done,
+                // either inside this method, or before calling it.
+                
                 var name = this.name;
 
                 // If there is no reference to our name, yet
-                var references = window.FileThisGlobalVariables[name];
+                var references = window.FileThisGlobalVariableNameToReferencesMap[name];
                 if (references === undefined)
                 {
                     // Add our reference, and we're done
-                    window.FileThisGlobalVariables[name] = [this];
+                    window.FileThisGlobalVariableNameToReferencesMap[name] = [this];
                     return;
                 }
 
@@ -157,12 +128,75 @@ limitations under the License.
                 references.push(this);
             },
 
+            _propagateValue: function()
+            {
+                var name = this.name;
+                var value = this._getValue();
+
+                // Set the values of all other references to our value
+                var references = window.FileThisGlobalVariableNameToReferencesMap[name];
+                references.forEach(function(reference)
+                {
+                    if (reference !== this)
+                        reference._setValue(value);
+                }.bind(this));
+            },
+
+
+            // Lifecycle: After "attached"
+
+            attached: function()
+            {
+                if (!window.FileThisGlobalVariablesCommitScheduled)
+                    this._scheduleCommitAllGlobalVariableValues();
+            },
+
+            _scheduleCommitAllGlobalVariableValues: function()
+            {
+                // We are the chosen one
+                window.FileThisGlobalVariablesCommitScheduled = true;
+                
+                // This is a simulation of domReady event.
+                // TODO: When migrate to Polymer 2, replace with a connectedCallback() method?
+                this.async(this._commitAllGlobalVariableValues);
+            },
+
+            _commitAllGlobalVariableValues: function()
+            {
+                window.FileThisGlobalVariablesCommitting = true;
+                var nameToReferencesMap = window.FileThisGlobalVariableNameToReferencesMap;
+                for (var name in nameToReferencesMap)
+                {
+                    if (!nameToReferencesMap.hasOwnProperty(name))
+                        continue;
+
+                    var references = nameToReferencesMap[name];
+                    references.forEach(function(reference)
+                    {
+                        reference._commitValue();
+                    });
+                }
+                window.FileThisGlobalVariablesCommitting = false;
+
+                window.FileThisGlobalVariablesArePending = false;
+            },
+
+
+            // Lifecycle: After "detached"
+
+            detached: function()
+            {
+                // TODO: Need to reset things, but which? Will we get ready() call again when re-attached?
+
+                this._unregister();
+            },
+
             _unregister: function()
             {
                 var name = this.name;
 
                 // If there are no references to our name, do nothing
-                var references = window.FileThisGlobalVariables[name];
+                var references = window.FileThisGlobalVariableNameToReferencesMap[name];
                 if (references === undefined)
                     return;
 
@@ -174,6 +208,46 @@ limitations under the License.
 
                 // Remove our reference from the list
                 references.splice(index, 1);
+            },
+
+
+            // Values ---------------------------------------------------------------
+
+            _getValue: function()
+            {
+                if (window.FileThisGlobalVariablesArePending)
+                {
+                    if (this._havePendingValue)
+                        return this._pendingValue;
+                    else
+                        return this.value;
+                }
+
+                return this.value;
+            },
+
+            _setValue: function(value)
+            {
+                if (window.FileThisGlobalVariablesArePending)
+                {
+                    this._pendingValue = value;
+                    this._havePendingValue = true;
+                    return;
+                }
+
+                this.set("value", value);
+            },
+            
+            _commitValue: function()
+            {
+                if (!this._havePendingValue)
+                    return;
+
+                var pendingValue = this._pendingValue;
+                this.set("value", pendingValue);
+
+                this._havePendingValue = false;
+                this._pendingValue = undefined;
             },
 
         })
