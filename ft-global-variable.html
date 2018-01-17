@@ -31,11 +31,10 @@ limitations under the License.
 
     <script>
 
-        // Make sure our global singletons exist
-        window.FileThisGlobalVariableNameToReferencesMap = window.FileThisGlobalVariableNameToReferencesMap || {};
-        window.FileThisGlobalVariablesWired = window.FileThisGlobalVariablesWired || false;
-        window.FileThisGlobalVariablesPropagating = window.FileThisGlobalVariablesPropagating || false;
-        window.FileThisGlobalVariablesWiringScheduled = window.FileThisGlobalVariablesWiringScheduled || false;
+        var gNameToReferencesMap = {};
+        var gWired = false;
+        var gPropagating = false;
+        var gWiringScheduled = false;
 
         Polymer({
 
@@ -55,23 +54,31 @@ limitations under the License.
                 value: {
                     notify: true,
                 },
+
+                _registered: {
+                    type: Boolean,
+                    value: false
+                },
             },
             
             ready: function()
             {
-                this._register();
+                if (!this._registered)
+                    this._register();
             },
             
             _register: function()
             {
+                this._registered = true;
+
                 var name = this.name;
 
                 // If there is no reference to our name, yet
-                var references = window.FileThisGlobalVariableNameToReferencesMap[name];
+                var references = gNameToReferencesMap[name];
                 if (references === undefined)
                 {
                     // Add our reference, and we're done
-                    window.FileThisGlobalVariableNameToReferencesMap[name] = [this];
+                    gNameToReferencesMap[name] = [this];
                     return;
                 }
 
@@ -87,12 +94,15 @@ limitations under the License.
 
             _onNameOrValueChanged: function(name, value)
             {
+                if (!this._registered)
+                    this._register();
+
                 // If not wired yet, do nothing
-                if (!window.FileThisGlobalVariablesWired)
+                if (!gWired)
                     return;
 
                 // If we are in the middle of propagating, do nothing
-                if (window.FileThisGlobalVariablesPropagating)
+                if (gPropagating)
                     return;
 
                 // If "name" is not defined yet, wait until it is
@@ -110,26 +120,26 @@ limitations under the License.
                 var value = this.get("value");
 
                 // Set the values of all other references to our value
-                var references = window.FileThisGlobalVariableNameToReferencesMap[name];
-                window.FileThisGlobalVariablesPropagating = true;
+                var references = gNameToReferencesMap[name];
+                gPropagating = true;
                 references.forEach(function(reference)
                 {
                     if (reference !== this)
                         reference.set("value", value);
                 }.bind(this));
-                window.FileThisGlobalVariablesPropagating = false;
+                gPropagating = false;
             },
 
             attached: function()
             {
-                if (!window.FileThisGlobalVariablesWiringScheduled)
+                if (!gWiringScheduled)
                     this._scheduleWireAllGlobalVariables();
             },
 
             _scheduleWireAllGlobalVariables: function()
             {
                 // We are the chosen one
-                window.FileThisGlobalVariablesWiringScheduled = true;
+                gWiringScheduled = true;
                 
                 // This is a simulation of DOM ready event.
                 // TODO: When migrate to Polymer 2, replace with a connectedCallback() method?
@@ -138,7 +148,7 @@ limitations under the License.
 
             _wireAllGlobalVariables: function()
             {
-                var nameToReferencesMap = window.FileThisGlobalVariableNameToReferencesMap;
+                var nameToReferencesMap = gNameToReferencesMap;
                 for (var name in nameToReferencesMap)
                 {
                     if (!nameToReferencesMap.hasOwnProperty(name))
@@ -170,7 +180,7 @@ limitations under the License.
                     referenceWithValue._propagateValue();
                 }
 
-                window.FileThisGlobalVariablesWired = true;
+                gWired = true;
             },
 
             detached: function()
@@ -185,7 +195,7 @@ limitations under the License.
                 var name = this.name;
 
                 // If there are no references to our name, do nothing
-                var references = window.FileThisGlobalVariableNameToReferencesMap[name];
+                var references = gNameToReferencesMap[name];
                 if (references === undefined)
                     return;
 
