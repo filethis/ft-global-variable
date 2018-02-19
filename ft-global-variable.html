@@ -44,6 +44,8 @@ limitations under the License.
         {
             // Set the values of all other references to our value
             var references = window.FileThis.FtGlobalVariable.gNameToReferencesMap[name];
+            if (!references)
+                return;
             window.FileThis.FtGlobalVariable.gPropagating = true;
             references.forEach(function(reference)
             {

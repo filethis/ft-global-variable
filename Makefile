@@ -1,6 +1,6 @@
 # Project configuration
 NAME=ft-global-variable
-VERSION=0.0.2
+VERSION=0.0.3
 LOCAL_PORT=3522
 GITHUB_USER=filethis
 GITHUB_USER_ABBREV=ft-global-variable
