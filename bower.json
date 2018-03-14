@@ -3,7 +3,7 @@
     "description": "A non-display element that provides global variables within a project, working across all elements regardless of where they are in the DOM.",
     "main": "ft-global-variable.html",
     "dependencies": {
-        "ft-element-demo": "filethis/ft-element-demo#^0.0.11",
+        "ft-element-demo": "filethis/ft-element-demo#^1.0.11",
         "polymer": "Polymer/polymer#1.9 - 2"
     },
     "devDependencies": {
