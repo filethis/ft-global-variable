@@ -82,12 +82,14 @@ limitations under the License.
             
             ready: function()
             {
-                if (!this._registered)
-                    this._register();
+                this._register();
             },
             
             _register: function()
             {
+                if (this._registered)
+                    return;
+
                 this._registered = true;
 
                 var name = this.name;
@@ -96,7 +98,7 @@ limitations under the License.
                 var references = window.FileThis.FtGlobalVariable.gNameToReferencesMap[name];
                 if (references === undefined)
                 {
-                    // Add our reference, and we're done
+                    // Add our reference to the list, and we're done
                     window.FileThis.FtGlobalVariable.gNameToReferencesMap[name] = [this];
                     return;
                 }
@@ -113,8 +115,8 @@ limitations under the License.
 
             _onNameOrValueChanged: function(name, value)
             {
-                if (!this._registered)
-                    this._register();
+                // Make sure we're registered
+                this._register();
 
                 // If not wired yet, do nothing
                 if (!window.FileThis.FtGlobalVariable.gDidInitialPropagation)
