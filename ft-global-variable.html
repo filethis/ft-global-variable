@@ -33,26 +33,66 @@ limitations under the License.
 
         // Make sure the "FileThis" namespace exists
         window.FileThis = window.FileThis || {};
-        window.FileThis.FtGlobalVariable = window.FileThis.FtGlobalVariable || {};
+        window.FileThis.FtGlobalVariables = window.FileThis.FtGlobalVariables || {};
 
-        window.FileThis.FtGlobalVariable.gNameToReferencesMap = {};
-        window.FileThis.FtGlobalVariable.gDidInitialPropagation = false;
-        window.FileThis.FtGlobalVariable.gPropagating = false;
-        window.FileThis.FtGlobalVariable.gInitialPropagationScheduled = false;
-        
-        window.FileThis.FtGlobalVariable.propagateValue = function(name, value)
+        window.FileThis.FtGlobalVariables.gNameToReferencesMap = {};
+        window.FileThis.FtGlobalVariables.gDidInitialPropagation = false;
+        window.FileThis.FtGlobalVariables.gPropagating = false;
+
+        window.FileThis.FtGlobalVariables.initialize = function()
+        {
+            if (window.FileThis.FtGlobalVariables.gDidInitialPropagation)
+                return;
+
+            var nameToReferencesMap = window.FileThis.FtGlobalVariables.gNameToReferencesMap;
+            for (var name in nameToReferencesMap)
+            {
+                if (!nameToReferencesMap.hasOwnProperty(name))
+                    continue;
+
+                var references = nameToReferencesMap[name];
+
+                // Find the first reference that has a defined value
+                // We want the first one because it will be the outermost element.
+                var referenceWithValue = null;
+                var referenceCount = references.length;
+                var lastReferenceIndex = referenceCount - 1;
+                for (var index = 0; index <= lastReferenceIndex; index++)
+                {
+                    var reference = references[index];
+                    var value = reference.get("value");
+
+                    if (value !== undefined)
+                    {
+                        referenceWithValue = reference;
+                        break;
+                    }
+                }
+
+                // If there is no reference with a value, skip to the next variable name
+                if (!referenceWithValue)
+                    continue;
+
+                // Propagate its value
+                referenceWithValue._propagateValue();
+            }
+
+            window.FileThis.FtGlobalVariables.gDidInitialPropagation = true;
+        };
+
+        window.FileThis.FtGlobalVariables.propagateValue = function(name, value)
         {
             // Set the values of all other references to our value
-            var references = window.FileThis.FtGlobalVariable.gNameToReferencesMap[name];
+            var references = window.FileThis.FtGlobalVariables.gNameToReferencesMap[name];
             if (!references)
                 return;
-            window.FileThis.FtGlobalVariable.gPropagating = true;
+            window.FileThis.FtGlobalVariables.gPropagating = true;
             references.forEach(function(reference)
             {
                 if (reference !== this)
                     reference.set("value", value);
             }.bind(this));
-            window.FileThis.FtGlobalVariable.gPropagating = false;
+            window.FileThis.FtGlobalVariables.gPropagating = false;
         };
 
         Polymer({
@@ -79,10 +119,16 @@ limitations under the License.
                     value: false
                 },
             },
-            
-            ready: function()
+
+            attached: function()
             {
                 this._register();
+            },
+
+
+            detached: function()
+            {
+                this._unregister();
             },
             
             _register: function()
@@ -95,11 +141,11 @@ limitations under the License.
                 var name = this.name;
 
                 // If there is no reference to our name, yet
-                var references = window.FileThis.FtGlobalVariable.gNameToReferencesMap[name];
+                var references = window.FileThis.FtGlobalVariables.gNameToReferencesMap[name];
                 if (references === undefined)
                 {
                     // Add our reference to the list, and we're done
-                    window.FileThis.FtGlobalVariable.gNameToReferencesMap[name] = [this];
+                    window.FileThis.FtGlobalVariables.gNameToReferencesMap[name] = [this];
                     return;
                 }
 
@@ -113,17 +159,36 @@ limitations under the License.
                 references.push(this);
             },
 
+            _unregister: function()
+            {
+                var name = this.name;
+
+                // If there are no references to our name, do nothing
+                var references = window.FileThis.FtGlobalVariables.gNameToReferencesMap[name];
+                if (references === undefined)
+                    return;
+
+                // If our reference is not in the list, do nothing
+                var index = references.indexOf(this);
+                var isReferenced = (index > 0);
+                if (!isReferenced)
+                    return;
+
+                // Remove our reference from the list
+                references.splice(index, 1);
+            },
+
             _onNameOrValueChanged: function(name, value)
             {
                 // Make sure we're registered
                 this._register();
 
                 // If not wired yet, do nothing
-                if (!window.FileThis.FtGlobalVariable.gDidInitialPropagation)
+                if (!window.FileThis.FtGlobalVariables.gDidInitialPropagation)
                     return;
 
                 // If we are in the middle of propagating, do nothing
-                if (window.FileThis.FtGlobalVariable.gPropagating)
+                if (window.FileThis.FtGlobalVariables.gPropagating)
                     return;
 
                 // If "name" is not defined yet, wait until it is
@@ -140,90 +205,9 @@ limitations under the License.
                 var name = this.name;
                 var value = this.get("value");
 
-                window.FileThis.FtGlobalVariable.propagateValue(name, value);
+                window.FileThis.FtGlobalVariables.propagateValue(name, value);
             },
 
-            attached: function()
-            {
-                if (!window.FileThis.FtGlobalVariable.gInitialPropagationScheduled)
-                    this._scheduleInitialPropagation();
-            },
-
-            _scheduleInitialPropagation: function()
-            {
-                // We are the chosen one
-                window.FileThis.FtGlobalVariable.gInitialPropagationScheduled = true;
-                
-                // This is a simulation of DOM ready event.
-                // TODO: When migrate to Polymer 2, replace with a connectedCallback() method?
-                this.async(this._initialPropagation);
-                // this.async(this._initialPropagation, 4000);
-            },
-
-            _initialPropagation: function()
-            {
-                var nameToReferencesMap = window.FileThis.FtGlobalVariable.gNameToReferencesMap;
-                for (var name in nameToReferencesMap)
-                {
-                    if (!nameToReferencesMap.hasOwnProperty(name))
-                        continue;
-
-                    var references = nameToReferencesMap[name];
-
-                    // Find the first reference that has a defined value
-                    // We want the first one because it will be the outermost element.
-                    var referenceWithValue = null;
-                    var referenceCount = references.length;
-                    var lastReferenceIndex = referenceCount - 1;
-                    for (var index = 0; index <= lastReferenceIndex; index++)
-                    {
-                        var reference = references[index];
-                        var value = reference.get("value");
-
-                        if (value !== undefined)
-                        {
-                            referenceWithValue = reference;
-                            break;
-                        }
-                    }
-
-                    // If there is no reference with a value, skip to the next variable name
-                    if (!referenceWithValue)
-                        continue;
-
-                    // Propagate its value
-                    referenceWithValue._propagateValue();
-                }
-
-                window.FileThis.FtGlobalVariable.gDidInitialPropagation = true;
-            },
-
-            detached: function()
-            {
-                // TODO: Need to reset things, but which? Will we get ready() call again when re-attached?
-
-                this._unregister();
-            },
-
-            _unregister: function()
-            {
-                var name = this.name;
-
-                // If there are no references to our name, do nothing
-                var references = window.FileThis.FtGlobalVariable.gNameToReferencesMap[name];
-                if (references === undefined)
-                    return;
-
-                // If our reference is not in the list, do nothing
-                var index = references.indexOf(this);
-                var isReferenced = (index > 0);
-                if (!isReferenced)
-                    return;
-
-                // Remove our reference from the list
-                references.splice(index, 1);
-            },
-            
         })
 
     </script>
