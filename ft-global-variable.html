@@ -157,6 +157,7 @@ limitations under the License.
                 // This is a simulation of DOM ready event.
                 // TODO: When migrate to Polymer 2, replace with a connectedCallback() method?
                 this.async(this._initialPropagation);
+                // this.async(this._initialPropagation, 4000);
             },
 
             _initialPropagation: function()
@@ -169,11 +170,12 @@ limitations under the License.
 
                     var references = nameToReferencesMap[name];
 
-                    // Find the last reference that has a defined value
+                    // Find the first reference that has a defined value
+                    // We want the first one because it will be the outermost element.
                     var referenceWithValue = null;
                     var referenceCount = references.length;
                     var lastReferenceIndex = referenceCount - 1;
-                    for (var index = lastReferenceIndex; index >= 0; index--)
+                    for (var index = 0; index <= lastReferenceIndex; index++)
                     {
                         var reference = references[index];
                         var value = reference.get("value");
