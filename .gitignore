@@ -1,4 +1,6 @@
 bower_components/
 build/
+dist/
 github-pages-tmp/
 *.bak
+
